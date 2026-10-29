@@ -14,6 +14,9 @@
       --bg: #f3f4f6;
       --card: #ffffff;
       --border: #e5e7eb;
+      --type-personal: #3b82f6;
+      --type-public: #8b5cf6;
+      --priority-normal: #f59e0b;
     }
 
     * {
@@ -88,6 +91,70 @@
       transform: scale(0.97);
     }
 
+    .field {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .field-label {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    .field select {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 15px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      outline: none;
+      background: #fff;
+      transition: border-color 0.2s;
+    }
+
+    .field select:focus {
+      border-color: var(--primary);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      font-size: 12px;
+      line-height: 1.6;
+      border-radius: 999px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .badge-type-personal {
+      color: #1e40af;
+      background: #dbeafe;
+    }
+
+    .badge-type-public {
+      color: #5b21b6;
+      background: #ede9fe;
+    }
+
+    .badge-priority-urgent {
+      color: #b91c1c;
+      background: #fee2e2;
+    }
+
+    .badge-priority-normal {
+      color: #b45309;
+      background: #fef3c7;
+    }
+
+    .badge-priority-low {
+      color: #4b5563;
+      background: #e5e7eb;
+    }
+
     .stats {
       display: flex;
       justify-content: space-between;
@@ -129,9 +196,27 @@
       transition: color 0.2s;
     }
 
+    li.completed {
+      background: #f9fafb;
+      border-color: #e5e7eb;
+    }
+
     li.completed .text {
       color: var(--text-light);
       text-decoration: line-through;
+    }
+
+    li.completed .badge {
+      opacity: 0.55;
+      filter: grayscale(1);
+    }
+
+    li.completed .delete-btn {
+      opacity: 0.65;
+    }
+
+    li.completed .delete-btn:hover {
+      opacity: 1;
     }
 
     li .delete-btn {
@@ -188,6 +273,24 @@
       <button id="add-btn">添加</button>
     </div>
 
+    <div class="input-row input-row--options">
+      <label class="field">
+        <span class="field-label">类型</span>
+        <select id="type-select">
+          <option value="personal" selected>个人</option>
+          <option value="public">公共</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">紧急度</span>
+        <select id="priority-select">
+          <option value="urgent">紧急</option>
+          <option value="normal" selected>一般</option>
+          <option value="low">不急</option>
+        </select>
+      </label>
+    </div>
+
     <div class="stats">
       <span id="stats-pending">未完成：0</span>
       <span id="stats-done">已完成：0</span>
@@ -202,12 +305,50 @@
       var STORAGE_KEY = 'todo-list-data';
       var todos = load();
 
+      // ==== pure logic (start) ====
+      function nextId(existingIds) {
+        var candidate = Date.now();
+        while (existingIds.indexOf(candidate) !== -1) {
+          candidate += 1;
+        }
+        return candidate;
+      }
+
+      function normalizeTodo(item, existingIds) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+          return null;
+        }
+
+        var text = (typeof item.text === 'string') ? item.text : '';
+        var completed = (item.completed === true);
+        var type = (item.type === 'public') ? 'public' : 'personal';
+        var priority = (item.priority === 'urgent' || item.priority === 'low')
+          ? item.priority : 'normal';
+        var id = (typeof item.id === 'number' && !isNaN(item.id))
+          ? item.id : nextId(existingIds || []);
+
+        return { id: id, text: text, completed: completed, type: type, priority: priority };
+      }
+
+      function createTodo(text, type, priority, existingIds) {
+        return {
+          id: nextId(existingIds || []),
+          text: text,
+          completed: false,
+          type: (type === 'public') ? 'public' : 'personal',
+          priority: (priority === 'urgent' || priority === 'low') ? priority : 'normal'
+        };
+      }
+      // ==== pure logic (end) ====
+
       // DOM 元素
       var input = document.getElementById('todo-input');
       var addBtn = document.getElementById('add-btn');
       var list = document.getElementById('todo-list');
       var statsPending = document.getElementById('stats-pending');
       var statsDone = document.getElementById('stats-done');
+      var typeSelect = document.getElementById('type-select');
+      var prioritySelect = document.getElementById('priority-select');
 
       // ---------- 数据持久化 ----------
       function load() {
@@ -216,7 +357,16 @@
           if (raw) {
             var parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
-              return parsed;
+              var result = [];
+              var ids = [];
+              for (var i = 0; i < parsed.length; i++) {
+                var todo = normalizeTodo(parsed[i], ids);
+                if (todo !== null) {
+                  result.push(todo);
+                  ids.push(todo.id);
+                }
+              }
+              return result;
             }
           }
         } catch (e) {
@@ -245,13 +395,16 @@
           return;
         }
 
-        todos.push({
-          id: Date.now(),
-          text: text,
-          completed: false
-        });
+        todos.push(createTodo(
+          text,
+          typeSelect.value,
+          prioritySelect.value,
+          todos.map(function (t) { return t.id; })
+        ));
         input.value = '';
         input.focus();
+        typeSelect.value = 'personal';
+        prioritySelect.value = 'normal';
         save();
         render();
       }
@@ -276,6 +429,18 @@
       }
 
       // ---------- 渲染 ----------
+      var TYPE_LABEL = { personal: '个人', public: '公共' };
+      var PRIORITY_LABEL = { urgent: '紧急', normal: '一般', low: '不急' };
+      var TYPE_CLASS = { personal: 'badge-type-personal', public: 'badge-type-public' };
+      var PRIORITY_CLASS = { urgent: 'badge-priority-urgent', normal: 'badge-priority-normal', low: 'badge-priority-low' };
+
+      function makeBadge(className, label) {
+        var b = document.createElement('span');
+        b.className = 'badge ' + className;
+        b.textContent = label;
+        return b;
+      }
+
       function render() {
         list.innerHTML = '';
 
@@ -297,6 +462,8 @@
             delBtn.setAttribute('aria-label', '删除');
 
             li.appendChild(span);
+            li.appendChild(makeBadge(TYPE_CLASS[todo.type], TYPE_LABEL[todo.type]));
+            li.appendChild(makeBadge(PRIORITY_CLASS[todo.priority], PRIORITY_LABEL[todo.priority]));
             li.appendChild(delBtn);
             list.appendChild(li);
           });
