@@ -1,0 +1,23 @@
+# Private local correspondence
+/邮件/
+
+# Untracked local reports not belonging to this project
+/PROJECT_PLAN.md
+/ZK-Code代码上传事件调查报告.md
+/大模型最新评测榜单_2026-10-27.md
+
+# Office temporary lock files
+~$*
+
+# Local editor and operating-system files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.log
+
+# Local secrets
+.env
+.env.*
+!.env.example
